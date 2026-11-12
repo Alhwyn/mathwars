@@ -18,14 +18,28 @@ function ansiBlock(lines: string[]): string {
 }
 
 function formatScore(score: number): string {
-  return new Intl.NumberFormat("en-US", {
+  const formatted = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
     notation: Math.abs(score) >= 1e15 ? "compact" : "standard",
   }).format(score);
+  if (formatted.length <= 24) return formatted;
+  return new Intl.NumberFormat("en-US", {
+    notation: "scientific",
+    maximumSignificantDigits: 6,
+  }).format(score);
+}
+
+export function sanitizePlayerText(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, "")
+    .replace(/<@/g, "<\u200b@")
+    .replace(/@(everyone|here)/gi, "@\u200b$1")
+    .replace(/`/g, "'");
 }
 
 function displayName(username: string): string {
-  return username.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 24);
+  const sanitized = sanitizePlayerText(username).slice(0, 24);
+  return sanitized.length > 0 ? sanitized : "Player";
 }
 
 function dateLabel(date: Date): string {

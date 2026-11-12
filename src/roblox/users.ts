@@ -1,4 +1,4 @@
-import { requestRobloxJson } from "./api.js";
+import { requestRobloxJson, RobloxHttpError } from "./api.js";
 
 export interface RobloxUser {
   id: number;
@@ -75,5 +75,21 @@ export async function getAvatarHeadshot(userId: number): Promise<string | null> 
   const avatar = payload.data[0];
   if (!isRecord(avatar)) return null;
   const imageUrl = avatar.imageUrl;
-  return typeof imageUrl === "string" ? imageUrl : null;
+  return typeof imageUrl === "string" && isRobloxThumbnailUrl(imageUrl) ? imageUrl : null;
+}
+
+export function isInvalidRobloxUsernameError(error: unknown): boolean {
+  return error instanceof RobloxHttpError && error.status === 400;
+}
+
+export function isRobloxThumbnailUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return false;
+  if (url.port !== "" && url.port !== "443") return false;
+  return url.hostname === "rbxcdn.com" || url.hostname.endsWith(".rbxcdn.com");
 }

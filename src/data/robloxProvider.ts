@@ -39,7 +39,9 @@ function parseLeaderboard(value: unknown): LeaderboardEntry[] {
   }
 
   if (!Array.isArray(entries)) {
-    throw new Error("Roblox DataStore value must be an array or contain a leaderboard/entries array");
+    throw new Error(
+      "Roblox DataStore value must be an array or contain a leaderboard/entries array. This bot does not scan per-player keys.",
+    );
   }
 
   const parsed = entries.map(parseEntry);

@@ -9,8 +9,14 @@ import {
 } from "discord.js";
 import type { Config } from "../config.js";
 import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
+import { sanitizePlayerText } from "../format/render.js";
 import { logError } from "../logging.js";
-import { getAvatarHeadshot, resolveUsername, type RobloxUser } from "../roblox/users.js";
+import {
+  getAvatarHeadshot,
+  isInvalidRobloxUsernameError,
+  resolveUsername,
+  type RobloxUser,
+} from "../roblox/users.js";
 
 export const leaderboardCommand = new SlashCommandBuilder()
   .setName("leaderboard")
@@ -93,8 +99,7 @@ function discordDisplayName(interaction: {
 }
 
 function safeMessageName(name: string): string {
-  return name
-    .replace(/[\u0000-\u001f\u007f]/g, "")
+  return sanitizePlayerText(name)
     .replace(/([\\*_~|`>])/g, "\\$1")
     .slice(0, 80);
 }
@@ -129,11 +134,18 @@ export async function executeLeaderboard(
     user = await resolveUsername(username);
   } catch (error) {
     await logError(client, config, "Roblox username lookup", error);
-    await interaction.editReply("Roblox is temporarily unavailable. Please try again later.");
+    await interaction.editReply(
+      isInvalidRobloxUsernameError(error)
+        ? "That Roblox username is not valid."
+        : "Roblox is temporarily unavailable. Please try again later.",
+    );
     return;
   }
   if (!user) {
-    await interaction.editReply(`Roblox user "${username}" was not found.`);
+    const shown = safeMessageName(username);
+    await interaction.editReply(
+      shown.length > 0 ? `Roblox user "${shown}" was not found.` : "That Roblox user was not found.",
+    );
     return;
   }
 

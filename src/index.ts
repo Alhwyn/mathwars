@@ -32,7 +32,10 @@ async function main(): Promise<void> {
   activeConfig = config;
   const provider: DataProvider =
     config.dataProvider === "roblox" ? new RobloxProvider(config) : new StubProvider();
-  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds],
+    allowedMentions: { parse: [] },
+  });
 
   client.once("clientReady", () => {
     console.log(`Logged in as ${client.user?.tag ?? "unknown user"}`);
@@ -46,6 +49,14 @@ async function main(): Promise<void> {
 
   client.on("interactionCreate", (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    if (config.discordGuildId && interaction.guildId !== config.discordGuildId) {
+      void interaction
+        .reply({ content: "This bot is not available in this server.", ephemeral: true })
+        .catch((error: unknown) => {
+          void logError(client, config, "Foreign server command", error);
+        });
+      return;
+    }
     if (interaction.commandName === "leaderboard") {
       void executeLeaderboard(interaction, provider, client, config).catch(async (error: unknown) => {
         await logError(client, config, "Leaderboard command", error);

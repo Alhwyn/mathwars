@@ -1,4 +1,4 @@
-import { ChannelType, type Client, type TextChannel } from "discord.js";
+import { ChannelType, type Client, type Message, type TextChannel } from "discord.js";
 import type { Config } from "../config.js";
 import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
 import { renderDailyChanges, renderDailyLeaderboard } from "../format/render.js";
@@ -10,14 +10,56 @@ const kinds: LeaderboardKind[] = ["kills", "wins"];
 const minimumUpdateIntervalMs = 24 * 60 * 60 * 1000;
 let updateInProgress = false;
 
-async function findPinnedLeaderboard(channel: TextChannel, botUserId: string, messageId?: string) {
-  const pinned = await channel.messages.fetchPinned();
-  return (
-    pinned.find((message) => message.id === messageId && message.author.id === botUserId) ??
-    pinned.find(
-      (message) => message.author.id === botUserId && message.content.includes(leaderboardMarker),
-    )
-  );
+function isMissingLeaderboardMessage(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ("code" in error && (error.code === 10008 || error.code === "10008")) return true;
+  return "status" in error && (error.status === 400 || error.status === 404);
+}
+
+async function findExistingLeaderboard(
+  channel: TextChannel,
+  botUserId: string,
+  messageId: string | undefined,
+): Promise<Message | undefined> {
+  if (messageId) {
+    try {
+      const saved = await channel.messages.fetch(messageId);
+      if (saved.author.id === botUserId) return saved;
+    } catch (error) {
+      if (!isMissingLeaderboardMessage(error)) throw error;
+    }
+  }
+
+  let before: Date | undefined;
+  for (let page = 0; page < 5; page += 1) {
+    const pins = await channel.messages.fetchPins({
+      limit: 50,
+      ...(before ? { before } : {}),
+    });
+    const match = pins.items
+      .map((item) => item.message)
+      .find((message) => message.author.id === botUserId && message.content.includes(leaderboardMarker));
+    if (match) return match;
+
+    const oldest = pins.items.reduce<number | undefined>((lowest, item) => {
+      if (lowest === undefined || item.pinnedTimestamp < lowest) return item.pinnedTimestamp;
+      return lowest;
+    }, undefined);
+    if (!pins.hasMore || oldest === undefined || !Number.isFinite(oldest)) return undefined;
+    const nextBefore = new Date(oldest);
+    if (before && nextBefore.getTime() >= before.getTime()) return undefined;
+    before = nextBefore;
+  }
+  return undefined;
+}
+
+async function pinLeaderboard(message: Message, client: Client, config: Config): Promise<void> {
+  if (message.pinned) return;
+  try {
+    await message.pin();
+  } catch (error) {
+    await logError(client, config, "Leaderboard pin", error);
+  }
 }
 
 export async function postDailyUpdate(
@@ -79,14 +121,15 @@ export async function postDailyUpdate(
       );
     const botUser = client.user;
     if (!botUser) throw new Error("Cannot post a leaderboard before the bot is ready");
-    const pinned = await findPinnedLeaderboard(channel, botUser.id, previous?.messageId);
-    if (pinned) {
-      await pinned.edit({ content });
-      nextSnapshot.messageId = pinned.id;
+    const existing = await findExistingLeaderboard(channel, botUser.id, previous?.messageId);
+    if (existing) {
+      await existing.edit({ content });
+      nextSnapshot.messageId = existing.id;
+      await pinLeaderboard(existing, client, config);
     } else {
       const message = await channel.send({ content });
-      await message.pin();
       nextSnapshot.messageId = message.id;
+      await pinLeaderboard(message, client, config);
     }
 
     const previousEntries: Partial<Record<LeaderboardKind, LeaderboardEntry[]>> = {};
