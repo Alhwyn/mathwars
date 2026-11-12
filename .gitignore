@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+snapshot.json
+snapshot.json.tmp
+npm-debug.log*
+
+.env
+.env.*
+!.env.example
+snapshot.json
+snapshot.json.tmp
+node_modules/
+dist/
