@@ -1,4 +1,4 @@
-import { ChannelType, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { Config } from "./config.js";
 
 export function safeErrorMessage(error: unknown, config?: Config): string {
@@ -10,23 +10,10 @@ export function safeErrorMessage(error: unknown, config?: Config): string {
 }
 
 export async function logError(
-  client: Client,
+  _client: Client,
   config: Config,
   context: string,
   error: unknown,
 ): Promise<void> {
-  const message = safeErrorMessage(error, config);
-  console.error(`[${context}] ${message}`);
-  if (!config.logChannelId) return;
-
-  try {
-    const channel = await client.channels.fetch(config.logChannelId);
-    if (channel?.type === ChannelType.GuildText) {
-      await channel.send(`**${context}**: ${message.slice(0, 1500)}`);
-    } else {
-      console.error("LOG_CHANNEL_ID is not a text channel");
-    }
-  } catch (loggingError) {
-    console.error("Could not write to LOG_CHANNEL_ID:", safeErrorMessage(loggingError, config));
-  }
+  console.error(`[${context}] ${safeErrorMessage(error, config)}`);
 }

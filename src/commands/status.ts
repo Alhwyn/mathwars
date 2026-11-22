@@ -3,21 +3,21 @@ import type { Config } from "../config.js";
 import { logError } from "../logging.js";
 import { readSnapshot } from "../storage/snapshot.js";
 
-const SECONDS_PER_DAY = 86_400;
-const SECONDS_PER_HOUR = 3_600;
 const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
+const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR;
 const MILLISECONDS_PER_SECOND = 1_000;
-
-export const statusCommand = new SlashCommandBuilder()
-  .setName("status")
-  .setDescription("Show the bot's status");
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / SECONDS_PER_DAY);
   const hours = Math.floor((seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR);
-    const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
   return `${days}d ${hours}h ${minutes}m`;
 }
+
+export const statusCommand = new SlashCommandBuilder()
+  .setName("status")
+  .setDescription("Show the bot's status");
 
 export async function executeStatus(
   interaction: ChatInputCommandInteraction,
@@ -43,7 +43,6 @@ export async function executeStatus(
     }
   } catch (error) {
     await logError(client, config, "Status snapshot lookup", error);
-    lastUpdate = "Could not read saved update";
   }
 
   const botUser = client.user;
@@ -55,7 +54,7 @@ export async function executeStatus(
       `Discord latency: ${client.ws.ping >= 0 ? `${client.ws.ping} ms` : "unavailable"}`,
       `Servers connected: ${client.guilds.cache.size}`,
       `Data source: ${config.dataProvider}`,
-      `Daily update: ${config.leaderboardChannelId ? `${config.updateHourUtc}:00 UTC in <#${config.leaderboardChannelId}>` : "disabled (no channel configured)"}`,
+      `Daily update: ${config.updateHourUtc}:00 UTC in <#${config.leaderboardChannelId}>`,
       `Last leaderboard update: ${lastUpdate}`,
     ].join("\n"),
   );

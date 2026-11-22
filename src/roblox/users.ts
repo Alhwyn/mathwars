@@ -1,13 +1,10 @@
+import { isRecord } from "../utils.js";
 import { requestRobloxJson } from "./api.js";
 
 export interface RobloxUser {
   id: number;
   name: string;
   displayName: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function resolveUsername(username: string): Promise<RobloxUser | null> {

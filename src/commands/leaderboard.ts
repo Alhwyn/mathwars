@@ -11,6 +11,7 @@ import type { Config } from "../config.js";
 import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
 import { logError } from "../logging.js";
 import { getAvatarHeadshot, resolveUsername, type RobloxUser } from "../roblox/users.js";
+import { safeDiscordName } from "../utils.js";
 
 export const leaderboardCommand = new SlashCommandBuilder()
   .setName("leaderboard")
@@ -34,7 +35,7 @@ function playerSummary(entries: LeaderboardEntry[], userId: number, topSize: num
   if (entry) {
     return `**Rank:** #${index + 1} (outside top ${topSize})\n**Score:** ${entry.score.toLocaleString("en-US")}`;
   }
-  if (entries.length === 0) return "No leaderboard data yet.";
+  if (entries.length === 0) return "No score record found";
   return `**Rank:** outside top ${topSize}\n**Score:** no score record found`;
 }
 
@@ -92,13 +93,6 @@ function discordDisplayName(interaction: {
   return interaction.user.globalName ?? interaction.user.username;
 }
 
-function safeMessageName(name: string): string {
-  return name
-    .replace(/[\u0000-\u001f\u007f]/g, "")
-    .replace(/([\\*_~|`>])/g, "\\$1")
-    .slice(0, 80);
-}
-
 function closedMessage(name: string): string {
   const messages = [
     `📜 **${name} closed the leaderboard. The numbers remain classified.**`,
@@ -129,7 +123,7 @@ export async function executeLeaderboard(
     user = await resolveUsername(username);
   } catch (error) {
     await logError(client, config, "Roblox username lookup", error);
-    await interaction.editReply("Roblox is temporarily unavailable. Please try again later.");
+    await interaction.deleteReply().catch(() => undefined);
     return;
   }
   if (!user) {
@@ -146,11 +140,11 @@ export async function executeLeaderboard(
     boards = { kills, wins };
   } catch (error) {
     await logError(client, config, "Leaderboard data lookup", error);
-    await interaction.editReply("Leaderboard data is temporarily unavailable. Please try again later.");
+    await interaction.deleteReply().catch(() => undefined);
     return;
   }
   if (boards.kills.length === 0 && boards.wins.length === 0) {
-    await interaction.editReply("No leaderboard data yet. Please try again later.");
+    await interaction.deleteReply().catch(() => undefined);
     return;
   }
 
@@ -181,7 +175,7 @@ export async function executeLeaderboard(
         }
 
         await buttonInteraction.update({
-          content: closedMessage(safeMessageName(discordDisplayName(buttonInteraction))),
+          content: closedMessage(safeDiscordName(discordDisplayName(buttonInteraction))),
           embeds: [],
           components: [],
           allowedMentions: { parse: [] },
@@ -194,12 +188,6 @@ export async function executeLeaderboard(
         }, 5_000).unref();
       } catch (error) {
         await logError(client, config, "Leaderboard button interaction", error);
-        if (!buttonInteraction.replied && !buttonInteraction.deferred) {
-          await buttonInteraction.reply({
-            content: "Could not switch leaderboard view. Please run the command again.",
-            ephemeral: true,
-          });
-        }
       }
     })();
   });

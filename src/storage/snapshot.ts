@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
+import { isRecord } from "../utils.js";
 
 export interface SnapshotLeaderboard {
   updatedAt: string;
@@ -11,10 +12,6 @@ export interface Snapshot {
   leaderboards: Partial<Record<LeaderboardKind, SnapshotLeaderboard>>;
   messageId?: string;
   lastPostedAt?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseEntries(value: unknown): LeaderboardEntry[] {

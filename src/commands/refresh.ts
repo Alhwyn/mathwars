@@ -22,16 +22,10 @@ export async function executeRefresh(
 
   await interaction.deferReply({ ephemeral: true });
   try {
-    const unavailable = await postDailyUpdate(client, provider, config);
-    if (unavailable.length > 0) {
-      await interaction.editReply(
-        `Leaderboard posted, but Roblox data was unavailable for ${unavailable.join(" and ")}. See the channel for saved-data status.`,
-      );
-    } else {
-      await interaction.editReply("Leaderboard refreshed.");
-    }
+    await postDailyUpdate(client, provider, config);
+    await interaction.editReply("Leaderboard refreshed.");
   } catch (error) {
     await logError(client, config, "Manual leaderboard refresh", error);
-    await interaction.editReply("The leaderboard could not be refreshed. Please check the bot logs.");
+    await interaction.deleteReply().catch(() => undefined);
   }
 }

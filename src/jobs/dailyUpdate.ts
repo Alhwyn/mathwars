@@ -28,10 +28,6 @@ export async function postDailyUpdate(
   if (updateInProgress) throw new Error("A leaderboard update is already in progress");
   updateInProgress = true;
   try {
-    if (!config.leaderboardChannelId) {
-      throw new Error("LEADERBOARD_CHANNEL_ID is required to post daily updates");
-    }
-
     const channel = await client.channels.fetch(config.leaderboardChannelId);
     if (!channel || channel.type !== ChannelType.GuildText) {
       throw new Error(`LEADERBOARD_CHANNEL_ID is not a text channel: ${config.leaderboardChannelId}`);

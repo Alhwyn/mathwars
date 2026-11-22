@@ -81,9 +81,9 @@ export function renderDailyChanges(
   const lines = [
     `${BOLD_CYAN}CHANGES ${previousUpdatedAt ? dateLabel(previousUpdatedAt) : "NEW"} -> ${dateLabel(updatedAt)}${RESET}`,
     "",
-    ...renderDailyStatChanges("kills", previous.kills, current.kills, topSize, failed.has("kills")),
+    ...renderDailyStatChanges("kills", previous.kills, current.kills, topSize),
     "",
-    ...renderDailyStatChanges("wins", previous.wins, current.wins, topSize, failed.has("wins")),
+    ...renderDailyStatChanges("wins", previous.wins, current.wins, topSize),
   ];
 
   if (!previousUpdatedAt) {
@@ -104,10 +104,8 @@ function renderDailyStatChanges(
   previous: LeaderboardEntry[] | undefined,
   current: LeaderboardEntry[] | undefined,
   topSize: number,
-  unavailable: boolean,
 ): string[] {
   const title = kind === "kills" ? "Kills:" : "Wins:";
-  if (unavailable) return [`${BOLD_YELLOW}${title}${RESET}`, `${RED}Update unavailable; saved data kept.${RESET}`];
   if (!previous || !current) {
     return [`${BOLD_YELLOW}${title}${RESET}`, `${GREEN}Initial snapshot; changes will appear next update.${RESET}`];
   }

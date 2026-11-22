@@ -17,10 +17,7 @@ import { logError, safeErrorMessage } from "./logging.js";
 
 async function registerCommands(config: ReturnType<typeof loadConfig>): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
-  const route = config.discordGuildId
-    ? Routes.applicationGuildCommands(config.discordClientId, config.discordGuildId)
-    : Routes.applicationCommands(config.discordClientId);
-  await rest.put(route, {
+  await rest.put(Routes.applicationCommands(config.discordClientId), {
     body: [leaderboardCommand.toJSON(), refreshCommand.toJSON(), statusCommand.toJSON()],
   });
 }
@@ -36,12 +33,8 @@ async function main(): Promise<void> {
 
   client.once("clientReady", () => {
     console.log(`Logged in as ${client.user?.tag ?? "unknown user"}`);
-    if (config.leaderboardChannelId) {
-      scheduleDailyUpdate(client, provider, config);
-      console.log(`Daily update scheduled for ${config.updateHourUtc}:00 UTC`);
-    } else {
-      console.warn("Daily updates are disabled: LEADERBOARD_CHANNEL_ID is not configured");
-    }
+    scheduleDailyUpdate(client, provider, config);
+    console.log(`Daily update scheduled for ${config.updateHourUtc}:00 UTC`);
   });
 
   client.on("interactionCreate", (interaction: Interaction) => {
@@ -49,41 +42,22 @@ async function main(): Promise<void> {
     if (interaction.commandName === "leaderboard") {
       void executeLeaderboard(interaction, provider, client, config).catch(async (error: unknown) => {
         await logError(client, config, "Leaderboard command", error);
-        try {
-          const message = "Could not load the leaderboard. Please try again later.";
-          if (interaction.deferred || interaction.replied) {
-            await interaction.editReply(message);
-          } else {
-            await interaction.reply({ content: message, ephemeral: true });
-          }
-        } catch (replyError) {
-          await logError(client, config, "Leaderboard error response", replyError);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.deleteReply().catch(() => undefined);
         }
       });
     } else if (interaction.commandName === "refresh") {
       void executeRefresh(interaction, client, provider, config).catch(async (error: unknown) => {
         await logError(client, config, "Refresh command", error);
-        try {
-          if (interaction.deferred || interaction.replied) {
-            await interaction.editReply("The leaderboard could not be refreshed.");
-          } else {
-            await interaction.reply({ content: "The leaderboard could not be refreshed.", ephemeral: true });
-          }
-        } catch (replyError) {
-          await logError(client, config, "Refresh error response", replyError);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.deleteReply().catch(() => undefined);
         }
       });
     } else if (interaction.commandName === "status") {
       void executeStatus(interaction, client, config).catch(async (error: unknown) => {
         await logError(client, config, "Status command", error);
-        try {
-          if (interaction.deferred || interaction.replied) {
-            await interaction.editReply("Could not load bot status.");
-          } else {
-            await interaction.reply({ content: "Could not load bot status.", ephemeral: true });
-          }
-        } catch (replyError) {
-          await logError(client, config, "Status error response", replyError);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.deleteReply().catch(() => undefined);
         }
       });
     }

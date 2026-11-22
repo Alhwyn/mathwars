@@ -5,15 +5,18 @@
   "description": "Discord leaderboard bot backed by Roblox Open Cloud or sample data",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.api.json --noEmit",
     "start": "node dist/index.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@vercel/blob": "^2.9.0",
+    "@vercel/functions": "^3.11.3",
     "discord.js": "^14.19.3",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
