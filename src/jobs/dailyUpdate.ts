@@ -1,9 +1,8 @@
 import { ChannelType, type Client, type TextChannel } from "discord.js";
-import type { Config } from "../config.js";
-import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
+import type { Config, DataProvider, LeaderboardEntry, LeaderboardKind, Snapshot } from "../types.js";
 import { renderDailyChanges, renderDailyLeaderboard } from "../format/render.js";
 import { logError } from "../logging.js";
-import { readSnapshot, writeSnapshot, type Snapshot } from "../storage/snapshot.js";
+import { readSnapshot, writeSnapshot } from "../storage/snapshot.js";
 
 const leaderboardMarker = "||leaderbot:daily-leaderboard||";
 const kinds: LeaderboardKind[] = ["kills", "wins"];

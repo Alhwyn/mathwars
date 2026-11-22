@@ -1,23 +1,6 @@
 import "dotenv/config";
-
-export interface Config {
-  discordToken: string;
-  discordClientId: string;
-  leaderboardChannelId: string;
-  dataProvider: "stub" | "roblox";
-  robloxApiKey?: string;
-  robloxUniverseId?: string;
-  robloxDataStoreName?: string;
-  updateHourUtc: number;
-  topSize: number;
-  snapshotPath: string;
-}
-
-function required(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
+import type { Config } from "./types.js";
+import { required } from "./utils.js";
 
 export function loadConfig(): Config {
   const dataProvider = process.env.DATA_PROVIDER?.trim().toLowerCase() || "stub";

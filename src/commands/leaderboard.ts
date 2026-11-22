@@ -7,10 +7,9 @@ import {
   type ChatInputCommandInteraction,
   type Client,
 } from "discord.js";
-import type { Config } from "../config.js";
-import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
+import type { Config, DataProvider, LeaderboardEntry, LeaderboardKind, RobloxUser } from "../types.js";
 import { logError } from "../logging.js";
-import { getAvatarHeadshot, resolveUsername, type RobloxUser } from "../roblox/users.js";
+import { getAvatarHeadshot, resolveUsername } from "../roblox/users.js";
 import { safeDiscordName } from "../utils.js";
 
 export const leaderboardCommand = new SlashCommandBuilder()

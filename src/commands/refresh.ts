@@ -1,6 +1,5 @@
 import { PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction, type Client } from "discord.js";
-import type { Config } from "../config.js";
-import type { DataProvider } from "../data/provider.js";
+import type { Config, DataProvider } from "../types.js";
 import { logError } from "../logging.js";
 import { postDailyUpdate } from "../jobs/dailyUpdate.js";
 

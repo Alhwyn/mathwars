@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import type { Config } from "./config.js";
+import type { Config } from "./types.js";
 
 export function safeErrorMessage(error: unknown, config?: Config): string {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

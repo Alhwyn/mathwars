@@ -1,11 +1,6 @@
+import type { RobloxUser } from "../types.js";
 import { isRecord } from "../utils.js";
 import { requestRobloxJson } from "./api.js";
-
-export interface RobloxUser {
-  id: number;
-  name: string;
-  displayName: string;
-}
 
 export async function resolveUsername(username: string): Promise<RobloxUser | null> {
   const payload = await requestRobloxJson(new URL("https://users.roblox.com/v1/usernames/users"), {

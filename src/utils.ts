@@ -8,3 +8,9 @@ export function safeDiscordName(name: string): string {
     .replace(/([\\*_~|`>])/g, "\\$1")
     .slice(0, 80);
 }
+
+export function required(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}

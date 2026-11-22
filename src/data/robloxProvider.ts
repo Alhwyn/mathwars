@@ -1,7 +1,6 @@
-import type { Config } from "../config.js";
+import type { Config, DataProvider, LeaderboardEntry, LeaderboardKind } from "../types.js";
 import { isRecord } from "../utils.js";
 import { requestRobloxJson } from "../roblox/api.js";
-import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "./provider.js";
 
 function parseEntry(value: unknown, index: number): LeaderboardEntry {
   if (!isRecord(value)) {

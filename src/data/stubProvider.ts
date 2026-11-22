@@ -1,4 +1,4 @@
-import type { DataProvider, LeaderboardEntry } from "./provider.js";
+import type { DataProvider, LeaderboardEntry } from "../types.js";
 
 const sampleKills: LeaderboardEntry[] = [
   { userId: 156, username: "Builderman", score: 12450 },

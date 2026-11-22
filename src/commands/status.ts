@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, type Client } from "discord.js";
-import type { Config } from "../config.js";
+import type { Config } from "../types.js";
 import { logError } from "../logging.js";
 import { readSnapshot } from "../storage/snapshot.js";
 

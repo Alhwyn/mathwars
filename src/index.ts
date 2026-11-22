@@ -10,7 +10,7 @@ import { executeRefresh, refreshCommand } from "./commands/refresh.js";
 import { executeStatus, statusCommand } from "./commands/status.js";
 import { loadConfig } from "./config.js";
 import { RobloxProvider } from "./data/robloxProvider.js";
-import type { DataProvider } from "./data/provider.js";
+import type { DataProvider } from "./types.js";
 import { StubProvider } from "./data/stubProvider.js";
 import { scheduleDailyUpdate } from "./jobs/dailyUpdate.js";
 import { logError, safeErrorMessage } from "./logging.js";

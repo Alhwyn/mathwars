@@ -1,4 +1,4 @@
-import type { LeaderboardEntry } from "../data/provider.js";
+import type { LeaderboardEntry } from "../types.js";
 
 const RESET = "\u001b[0m";
 const GREEN = "\u001b[32m";
