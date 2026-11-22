@@ -3,14 +3,19 @@ import type { Config } from "../config.js";
 import { logError } from "../logging.js";
 import { readSnapshot } from "../storage/snapshot.js";
 
+const SECONDS_PER_DAY = 86_400;
+const SECONDS_PER_HOUR = 3_600;
+const SECONDS_PER_MINUTE = 60;
+const MILLISECONDS_PER_SECOND = 1_000;
+
 export const statusCommand = new SlashCommandBuilder()
   .setName("status")
   .setDescription("Show the bot's status");
 
 function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86_400);
-  const hours = Math.floor((seconds % 86_400) / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
+  const days = Math.floor(seconds / SECONDS_PER_DAY);
+  const hours = Math.floor((seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR);
+    const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
   return `${days}d ${hours}h ${minutes}m`;
 }
 
@@ -34,7 +39,7 @@ export async function executeStatus(
       .filter(Number.isFinite)
       .sort((a, b) => b - a)[0];
     if (lastUpdateTime !== undefined) {
-      lastUpdate = `<t:${Math.floor(lastUpdateTime / 1000)}:R>`;
+      lastUpdate = `<t:${Math.floor(lastUpdateTime / MILLISECONDS_PER_SECOND)}:R>`;
     }
   } catch (error) {
     await logError(client, config, "Status snapshot lookup", error);
