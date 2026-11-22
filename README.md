@@ -18,5 +18,5 @@
 
 ## Vercel
 
-Deploy this repo. Connect a Blob store, and set `DISCORD_PUBLIC_KEY` and `CRON_SECRET` with the other bot variables. Then set the Discord Interactions Endpoint URL to `https://<your-domain>/api/interactions`. Leave `npm start` off once that URL is saved. The daily post runs from `vercel.json`.
+Deploy this repo. Connect a Blob store, and set `DISCORD_PUBLIC_KEY` and `CRON_SECRET` with the other bot variables. Then set the Discord Interactions Endpoint URL to `https://<your-domain>/api/interactions`. Leave `npm start` off once that URL is saved. The weekly post runs from `/api/weekly` on Sunday at 08:00 UTC.
  

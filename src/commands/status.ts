@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, type Client } from "discord.js";
 import type { Config } from "../types.js";
+import { weeklyUpdateLabel } from "../config.js";
 import { logError } from "../logging.js";
 import { readSnapshot } from "../storage/snapshot.js";
 
@@ -24,8 +25,6 @@ export async function executeStatus(
   client: Client,
   config: Config,
 ): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
-
   let lastUpdate = "No saved update";
   try {
     const snapshot = await readSnapshot(config.snapshotPath);
@@ -46,16 +45,17 @@ export async function executeStatus(
   }
 
   const botUser = client.user;
-  await interaction.editReply(
-    [
+  await interaction.reply({
+    content: [
       "**Bot status**",
       `Bot: ${botUser ? `${botUser.tag} (${botUser.id})` : "not connected"}`,
       `Uptime: ${formatUptime(process.uptime())}`,
       `Discord latency: ${client.ws.ping >= 0 ? `${client.ws.ping} ms` : "unavailable"}`,
       `Servers connected: ${client.guilds.cache.size}`,
       `Data source: ${config.dataProvider}`,
-      `Daily update: ${config.updateHourUtc}:00 UTC in <#${config.leaderboardChannelId}>`,
+      `Weekly update: ${weeklyUpdateLabel(config)} in <#${config.leaderboardChannelId}>`,
       `Last leaderboard update: ${lastUpdate}`,
     ].join("\n"),
-  );
+    ephemeral: true,
+  });
 }

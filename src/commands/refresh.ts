@@ -19,12 +19,10 @@ export async function executeRefresh(
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
   try {
     await postDailyUpdate(client, provider, config);
-    await interaction.editReply("Leaderboard refreshed.");
+    await interaction.reply({ content: "Leaderboard refreshed.", ephemeral: true });
   } catch (error) {
     await logError(client, config, "Manual leaderboard refresh", error);
-    await interaction.deleteReply().catch(() => undefined);
   }
 }

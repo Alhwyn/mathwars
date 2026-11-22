@@ -2,11 +2,13 @@ export interface Config {
   discordToken: string;
   discordClientId: string;
   leaderboardChannelId: string;
-  dataProvider: "stub" | "roblox";
+  dataProvider: "roblox";
   robloxApiKey?: string;
   robloxUniverseId?: string;
-  robloxDataStoreName?: string;
+  robloxKillsDataStore?: string;
+  robloxWinsDataStore?: string;
   updateHourUtc: number;
+  updateWeekdayUtc: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   topSize: number;
   snapshotPath: string;
 }
@@ -21,6 +23,7 @@ export type LeaderboardKind = "kills" | "wins";
 
 export interface DataProvider {
   getLeaderboard(kind: LeaderboardKind): Promise<LeaderboardEntry[]>;
+  getScore(kind: LeaderboardKind, userId: number): Promise<number | null>;
 }
 
 export interface RobloxUser {

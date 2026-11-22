@@ -1,14 +1,11 @@
-import { waitUntil } from "@vercel/functions";
-import { EmbedBuilder, REST, Routes } from "discord.js";
 import nacl from "tweetnacl";
-import { publishLeaderboard, cloudConfig } from "./daily.js";
-import { loadConfig } from "../src/config.js";
+import { publishLeaderboard, cloudConfig } from "./weekly.js";
+import { globalBoard, userCard } from "../src/commands/leaderboard.js";
+import { loadConfig, weeklyUpdateLabel } from "../src/config.js";
 import { safeErrorMessage } from "../src/logging.js";
 import { RobloxProvider } from "../src/data/robloxProvider.js";
-import type { Config, LeaderboardEntry } from "../src/types.js";
-import { StubProvider } from "../src/data/stubProvider.js";
-import { getAvatarHeadshot, resolveUsername } from "../src/roblox/users.js";
-import { isRecord, safeDiscordName } from "../src/utils.js";
+import type { Config } from "../src/types.js";
+import { isRecord } from "../src/utils.js";
 import { readSnapshot } from "../src/storage/snapshot.js";
 
 const ephemeral = 1 << 6;
@@ -34,51 +31,11 @@ function unauthorized(): Response {
   return new Response("invalid request signature", { status: 401 });
 }
 
-async function dismiss(config: Config, applicationId: string, token: string): Promise<void> {
-  const rest = new REST({ version: "10" }).setToken(config.discordToken);
-  await rest.delete(Routes.webhookMessage(applicationId, token, "@original"));
-}
-
-async function followUp(config: Config, applicationId: string, token: string, body: Record<string, unknown>): Promise<void> {
-  const rest = new REST({ version: "10" }).setToken(config.discordToken);
-  await rest.patch(Routes.webhookMessage(applicationId, token, "@original"), { body });
-}
-
-function summary(entries: LeaderboardEntry[], userId: number, topSize: number): string {
-  const index = entries.findIndex((entry) => entry.userId === userId);
-  const entry = entries[index];
-  if (index >= 0 && index < topSize && entry) return `**Rank:** #${index + 1}\n**Score:** ${entry.score.toLocaleString("en-US")}`;
-  if (entry) return `**Rank:** #${index + 1}\n**Score:** ${entry.score.toLocaleString("en-US")}`;
-  return entries.length === 0 ? "No score record found" : `**Rank:** outside top ${topSize}\n**Score:** no score record found`;
-}
-
-async function leaderboardReply(config: Config, username: string, userId: string): Promise<Record<string, unknown> | null> {
-  const provider = config.dataProvider === "roblox" ? new RobloxProvider(config) : new StubProvider();
-  const account = await resolveUsername(username.trim());
-  if (!account) return { content: `Roblox user "${username.trim()}" was not found.` };
-  const [kills, wins] = await Promise.all([provider.getLeaderboard("kills"), provider.getLeaderboard("wins")]);
-  if (kills.length === 0 && wins.length === 0) return null;
-  const avatar = await getAvatarHeadshot(account.id).catch(() => null);
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setAuthor({ name: `${account.displayName} (@${account.name})` })
-    .setTitle("Roblox leaderboard")
-    .setURL(`https://www.roblox.com/users/${account.id}/profile`)
-    .addFields(
-      { name: "⚔️ Kills", value: summary(kills, account.id, config.topSize) },
-      { name: "🏆 Wins", value: summary(wins, account.id, config.topSize) },
-    )
-    .setFooter({ text: "Roblox profile" });
-  if (avatar) embed.setThumbnail(avatar);
-  return {
-    embeds: [embed.toJSON()],
-    components: [
-      {
-        type: 1,
-        components: [{ type: 2, style: 2, label: "Close", emoji: { name: "✖️" }, custom_id: `leaderboard:${userId}:close` }],
-      },
-    ],
-  };
+function commandReply(data: object, hidden = false): Response {
+  return Response.json({
+    type: 4,
+    data: hidden ? { ...data, flags: ephemeral } : data,
+  });
 }
 
 async function statusReply(config: Config): Promise<Record<string, unknown>> {
@@ -92,7 +49,7 @@ async function statusReply(config: Config): Promise<Record<string, unknown>> {
     content: [
       "**Bot status**",
       `Data source: ${config.dataProvider}`,
-      `Daily update: ${config.updateHourUtc}:00 UTC in <#${config.leaderboardChannelId}>`,
+      `Weekly update: ${weeklyUpdateLabel(config)} in <#${config.leaderboardChannelId}>`,
       `Last leaderboard update: ${latest === undefined ? "No saved update" : `<t:${Math.floor(latest / 1000)}:R>`}`,
     ].join("\n"),
   };
@@ -133,23 +90,7 @@ async function handleInteraction(request: Request): Promise<Response> {
   }
 
   const member = isRecord(body.member) ? body.member : undefined;
-  const user = (member && isRecord(member.user) ? member.user : undefined) ?? (isRecord(body.user) ? body.user : undefined);
-  const userId = user && typeof user.id === "string" ? user.id : "";
-  const name = member && typeof member.nick === "string" && member.nick ? member.nick : user && typeof user.global_name === "string" ? user.global_name : user && typeof user.username === "string" ? user.username : "Someone";
-
-  if (body.type === 3 && typeof body.data.custom_id === "string") {
-    const owner = /^leaderboard:(\d{1,20}):close$/.exec(body.data.custom_id)?.[1];
-    if (!owner) return Response.json({ type: 6 });
-    if (owner !== userId) {
-      return Response.json({ type: 4, data: { content: "Only the person who ran this command can use these buttons.", flags: ephemeral } });
-    }
-    const safe = safeDiscordName(name);
-    return Response.json({
-      type: 7,
-      data: { content: `**${safe} closed the leaderboard.**`, embeds: [], components: [], allowed_mentions: { parse: [] } },
-    });
-  }
-
+  if (body.type === 3) return Response.json({ type: 6 });
   if (body.type !== 2 || typeof body.data.name !== "string") return new Response(null, { status: 400 });
   const command = body.data.name;
   const options: Record<string, string> = {};
@@ -158,45 +99,21 @@ async function handleInteraction(request: Request): Promise<Response> {
       if (isRecord(option) && typeof option.name === "string" && typeof option.value === "string") options[option.name] = option.value;
     }
   }
-  const token = body.token;
-  const applicationId = body.application_id;
   const permissions = member && typeof member.permissions === "string" ? member.permissions : "0";
 
-  waitUntil(
-    (async () => {
-      try {
-        if (command === "refresh") {
-          const admin = (BigInt(permissions) & 8n) === 8n;
-          await followUp(config, applicationId, token, {
-            content: admin ? await publishLeaderboard(config) : "Only server administrators can refresh the leaderboard.",
-          });
-          return;
-        }
-        if (command === "status") {
-          await followUp(config, applicationId, token, await statusReply(config));
-          return;
-        }
-        if (command === "leaderboard") {
-          const reply = await leaderboardReply(config, options.roblox_username ?? "", userId);
-          if (!reply) {
-            await dismiss(config, applicationId, token);
-            return;
-          }
-          await followUp(config, applicationId, token, reply);
-          return;
-        }
-        await dismiss(config, applicationId, token);
-      } catch (error) {
-        console.error(safeErrorMessage(error, config));
-        await dismiss(config, applicationId, token).catch((dismissError: unknown) => {
-          console.error(safeErrorMessage(dismissError, config));
-        });
-      }
-    })(),
+  if (command === "refresh") {
+    const admin = (BigInt(permissions) & 8n) === 8n;
+    if (!admin) {
+      return commandReply({ content: "Only server administrators can refresh the leaderboard." }, true);
+    }
+    return commandReply({ content: await publishLeaderboard(config) }, true);
+  }
+  if (command === "status") return commandReply(await statusReply(config), true);
+  if (command !== "global" && command !== "user") return new Response(null, { status: 204 });
+  const provider = new RobloxProvider(config);
+  return commandReply(
+    command === "global"
+      ? await globalBoard(provider, config.topSize)
+      : await userCard(provider, options.roblox_username ?? ""),
   );
-
-  return Response.json({
-    type: 5,
-    ...(command === "refresh" || command === "status" ? { data: { flags: ephemeral } } : {}),
-  });
 }

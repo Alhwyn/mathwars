@@ -2,23 +2,20 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { timingSafeEqual } from "node:crypto";
 import { BlobNotFoundError, get, put } from "@vercel/blob";
 import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
-import { leaderboardCommand } from "../src/commands/leaderboard.js";
-import { refreshCommand } from "../src/commands/refresh.js";
-import { statusCommand } from "../src/commands/status.js";
+import { slashCommands } from "../src/commands/leaderboard.js";
 import { loadConfig } from "../src/config.js";
 import type { Config } from "../src/types.js";
 import { RobloxProvider } from "../src/data/robloxProvider.js";
-import { StubProvider } from "../src/data/stubProvider.js";
 import { postDailyUpdate } from "../src/jobs/dailyUpdate.js";
 import { readSnapshot } from "../src/storage/snapshot.js";
 import { safeErrorMessage } from "../src/logging.js";
 
 const blobPath = "leaderbot/snapshot.json";
 const tempSnapshot = "/tmp/leaderbot-snapshot.json";
-const twelveHours = 12 * 60 * 60 * 1000;
+const weekMs = 6 * 24 * 60 * 60 * 1000;
 
 function provider(config: Config) {
-  return config.dataProvider === "roblox" ? new RobloxProvider(config) : new StubProvider();
+  return new RobloxProvider(config);
 }
 
 export async function cloudConfig(config: Config): Promise<Config> {
@@ -78,12 +75,14 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const config = loadConfig();
     const rest = new REST({ version: "10" }).setToken(config.discordToken);
-    await rest.put(Routes.applicationCommands(config.discordClientId), { body: [leaderboardCommand.toJSON(), refreshCommand.toJSON(), statusCommand.toJSON()] });
+    await rest.put(Routes.applicationCommands(config.discordClientId), {
+      body: slashCommands.map((command) => command.toJSON()),
+    });
 
     const stored = await cloudConfig(config);
     const snapshot = await readSnapshot(stored.snapshotPath);
     const postedAt = snapshot?.lastPostedAt ? Date.parse(snapshot.lastPostedAt) : Number.NaN;
-    if (Number.isFinite(postedAt) && Date.now() - postedAt < twelveHours) {
+    if (Number.isFinite(postedAt) && Date.now() - postedAt < weekMs) {
       return Response.json({ ok: true, skipped: true });
     }
     return Response.json({ ok: true, message: await publishLeaderboard(stored) });

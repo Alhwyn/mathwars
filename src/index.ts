@@ -5,20 +5,19 @@ import {
   Routes,
   type Interaction,
 } from "discord.js";
-import { executeLeaderboard, leaderboardCommand } from "./commands/leaderboard.js";
-import { executeRefresh, refreshCommand } from "./commands/refresh.js";
-import { executeStatus, statusCommand } from "./commands/status.js";
-import { loadConfig } from "./config.js";
+import { executeGlobal, executeUser, slashCommands } from "./commands/leaderboard.js";
+import { executeRefresh } from "./commands/refresh.js";
+import { executeStatus } from "./commands/status.js";
+import { loadConfig, weeklyUpdateLabel } from "./config.js";
 import { RobloxProvider } from "./data/robloxProvider.js";
 import type { DataProvider } from "./types.js";
-import { StubProvider } from "./data/stubProvider.js";
 import { scheduleDailyUpdate } from "./jobs/dailyUpdate.js";
 import { logError, safeErrorMessage } from "./logging.js";
 
 async function registerCommands(config: ReturnType<typeof loadConfig>): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   await rest.put(Routes.applicationCommands(config.discordClientId), {
-    body: [leaderboardCommand.toJSON(), refreshCommand.toJSON(), statusCommand.toJSON()],
+    body: slashCommands.map((command) => command.toJSON()),
   });
 }
 
@@ -28,39 +27,31 @@ async function main(): Promise<void> {
   const config = loadConfig();
   activeConfig = config;
   const provider: DataProvider =
-    config.dataProvider === "roblox" ? new RobloxProvider(config) : new StubProvider();
+    new RobloxProvider(config);
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
   client.once("clientReady", () => {
     console.log(`Logged in as ${client.user?.tag ?? "unknown user"}`);
     scheduleDailyUpdate(client, provider, config);
-    console.log(`Daily update scheduled for ${config.updateHourUtc}:00 UTC`);
+    console.log(`Weekly update scheduled for ${weeklyUpdateLabel(config)}`);
   });
 
   client.on("interactionCreate", (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName === "leaderboard") {
-      void executeLeaderboard(interaction, provider, client, config).catch(async (error: unknown) => {
-        await logError(client, config, "Leaderboard command", error);
-        if (interaction.deferred || interaction.replied) {
-          await interaction.deleteReply().catch(() => undefined);
-        }
-      });
-    } else if (interaction.commandName === "refresh") {
-      void executeRefresh(interaction, client, provider, config).catch(async (error: unknown) => {
-        await logError(client, config, "Refresh command", error);
-        if (interaction.deferred || interaction.replied) {
-          await interaction.deleteReply().catch(() => undefined);
-        }
-      });
-    } else if (interaction.commandName === "status") {
-      void executeStatus(interaction, client, config).catch(async (error: unknown) => {
-        await logError(client, config, "Status command", error);
-        if (interaction.deferred || interaction.replied) {
-          await interaction.deleteReply().catch(() => undefined);
-        }
-      });
-    }
+    const command = interaction.commandName;
+    const run =
+      command === "global" ? executeGlobal(interaction, provider, config)
+      : command === "user" ? executeUser(interaction, provider)
+      : command === "refresh" ? executeRefresh(interaction, client, provider, config)
+      : command === "status" ? executeStatus(interaction, client, config)
+      : undefined;
+    if (!run) return;
+    void run.catch(async (error: unknown) => {
+      await logError(client, config, command, error);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.deleteReply().catch(() => undefined);
+      }
+    });
   });
 
   await client.login(config.discordToken);
