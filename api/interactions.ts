@@ -31,10 +31,10 @@ function unauthorized(): Response {
   return new Response("invalid request signature", { status: 401 });
 }
 
-function commandReply(data: object, hidden = false): Response {
+function commandReply(data: object): Response {
   return Response.json({
     type: 4,
-    data: hidden ? { ...data, flags: ephemeral } : data,
+    data: { ...data, flags: ephemeral },
   });
 }
 
@@ -104,11 +104,11 @@ async function handleInteraction(request: Request): Promise<Response> {
   if (command === "refresh") {
     const admin = (BigInt(permissions) & 8n) === 8n;
     if (!admin) {
-      return commandReply({ content: "Only server administrators can refresh the leaderboard." }, true);
+      return commandReply({ content: "Only server administrators can refresh the leaderboard." });
     }
-    return commandReply({ content: await publishLeaderboard(config) }, true);
+    return commandReply({ content: await publishLeaderboard(config) });
   }
-  if (command === "status") return commandReply(await statusReply(config), true);
+  if (command === "status") return commandReply(await statusReply(config));
   if (command !== "global" && command !== "user") return new Response(null, { status: 204 });
   const provider = new RobloxProvider(config);
   return commandReply(
