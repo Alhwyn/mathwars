@@ -62,12 +62,15 @@ export async function executeGlobal(
   provider: DataProvider,
   config: Config,
 ): Promise<void> {
-  await interaction.reply(await globalBoard(provider, config.topSize));
+  await interaction.reply({ ...(await globalBoard(provider, config.topSize)), ephemeral: true });
 }
 
 export async function executeUser(
   interaction: ChatInputCommandInteraction,
   provider: DataProvider,
 ): Promise<void> {
-  await interaction.reply(await userCard(provider, interaction.options.getString("roblox_username", true)));
+  await interaction.reply({
+    ...(await userCard(provider, interaction.options.getString("roblox_username", true))),
+    ephemeral: true,
+  });
 }
