@@ -1,156 +1,88 @@
-import type { Config } from "../config.js";
+import type { Config, DataProvider, LeaderboardEntry, LeaderboardKind } from "../types.js";
+import { isRecord } from "../utils.js";
 import { requestRobloxJson } from "../roblox/api.js";
-import { resolveUsernames } from "../roblox/users.js";
-import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "./provider.js";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseEntry(value: unknown, index: number): LeaderboardEntry {
-  if (!isRecord(value)) {
-    throw new Error(`Invalid leaderboard entry at index ${index}`);
-  }
-
-  const userId = value.userId;
-  const username = value.username;
-  const score = value.score;
-  if (
-    typeof userId !== "number" ||
-    !Number.isSafeInteger(userId) ||
-    userId <= 0 ||
-    typeof username !== "string" ||
-    username.trim().length === 0 ||
-    typeof score !== "number" ||
-    !Number.isFinite(score)
-  ) {
-    throw new Error(`Invalid leaderboard entry at index ${index}`);
-  }
-
-  return { userId, username: username.trim(), score };
-}
-
-function parseLeaderboard(value: unknown): LeaderboardEntry[] {
-  let entries: unknown;
-  if (Array.isArray(value)) {
-    entries = value;
-  } else if (isRecord(value)) {
-    entries = value.leaderboard ?? value.entries;
-  }
-
-  if (!Array.isArray(entries)) {
-    throw new Error("Roblox DataStore value must be an array or contain a leaderboard/entries array");
-  }
-
-  const parsed = entries.map(parseEntry);
-  const seenUserIds = new Set<number>();
-  for (const entry of parsed) {
-    if (seenUserIds.has(entry.userId)) {
-      throw new Error(`Duplicate Roblox userId in leaderboard: ${entry.userId}`);
-    }
-    seenUserIds.add(entry.userId);
-  }
-  return parsed.sort((a, b) => b.score - a.score);
-}
-
-function parseOrderedEntries(value: unknown): Array<{ userId: number; score: number }> {
-  if (!isRecord(value) || !Array.isArray(value.orderedDataStoreEntries)) {
-    throw new Error("Roblox ordered DataStore response does not contain orderedDataStoreEntries");
-  }
-
-  const entries = value.orderedDataStoreEntries.map((item, index) => {
-    if (!isRecord(item)) throw new Error(`Invalid ordered leaderboard entry at index ${index}`);
-    const userId = typeof item.id === "string" ? Number(item.id) : Number.NaN;
-    if (
-      !Number.isSafeInteger(userId) ||
-      userId <= 0 ||
-      typeof item.value !== "number" ||
-      !Number.isFinite(item.value)
-    ) {
-      throw new Error(`Invalid ordered leaderboard entry at index ${index}`);
-    }
-    return { userId, score: item.value };
+// Reads the live Math Wars ordered DataStores (written by OlympiadScores.luau).
+// Each entry key is a Roblox userId and its value is that player's best score.
+export function parseOrderedEntries(value: unknown): { userId: number; score: number }[] {
+  if (!isRecord(value)) throw new Error("Roblox ordered DataStore returned an invalid response");
+  const entries = value.orderedDataStoreEntries ?? [];
+  if (!Array.isArray(entries)) throw new Error("Roblox ordered DataStore returned an invalid response");
+  return entries.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const userId = Number(entry.id);
+    const score = Number(entry.value);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(score)) return [];
+    return [{ userId, score }];
   });
+}
 
-  const seenUserIds = new Set<number>();
-  for (const entry of entries) {
-    if (seenUserIds.has(entry.userId)) {
-      throw new Error(`Duplicate Roblox userId in ordered leaderboard: ${entry.userId}`);
-    }
-    seenUserIds.add(entry.userId);
+async function usernames(userIds: number[]): Promise<Map<number, string>> {
+  const names = new Map<number, string>();
+  if (userIds.length === 0) return names;
+  const data = await requestRobloxJson(new URL("https://users.roblox.com/v1/users"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ userIds, excludeBannedUsers: false }),
+  });
+  const users = isRecord(data) && Array.isArray(data.data) ? data.data : [];
+  for (const user of users) {
+    if (isRecord(user) && typeof user.id === "number" && typeof user.name === "string") names.set(user.id, user.name);
   }
-  return entries;
+  return names;
 }
 
 export class RobloxProvider implements DataProvider {
   private readonly apiKey: string;
   private readonly universeId: string;
+  private readonly stores: Record<LeaderboardKind, string>;
+  private readonly topSize: number;
 
-  constructor(private readonly config: Config) {
-    if (!config.robloxApiKey || !config.robloxUniverseId) {
+  constructor(config: Config) {
+    if (!config.robloxApiKey || !config.robloxUniverseId || !config.robloxKillsDataStore || !config.robloxWinsDataStore) {
       throw new Error("Roblox Open Cloud settings are missing");
     }
     this.apiKey = config.robloxApiKey;
     this.universeId = config.robloxUniverseId;
+    this.stores = { kills: config.robloxKillsDataStore, wins: config.robloxWinsDataStore };
+    this.topSize = config.topSize;
+  }
+
+  private orderedEntriesUrl(kind: LeaderboardKind, userId?: number): URL {
+    const entry = userId === undefined ? "" : `/${encodeURIComponent(String(userId))}`;
+    return new URL(
+      `https://apis.roblox.com/cloud/v2/universes/${encodeURIComponent(this.universeId)}` +
+        `/ordered-data-stores/${encodeURIComponent(this.stores[kind])}/scopes/global/entries${entry}`,
+    );
+  }
+
+  private cloudGet(url: URL): Promise<unknown> {
+    return requestRobloxJson(url, {
+      headers: { "x-api-key": this.apiKey, Accept: "application/json" },
+    });
   }
 
   async getLeaderboard(kind: LeaderboardKind): Promise<LeaderboardEntry[]> {
-    if (this.config.robloxDataStoreMode === "ordered") {
-      return this.getOrderedLeaderboard(kind);
-    }
-
-    const dataStoreName =
-      kind === "kills"
-        ? this.config.robloxKillsDataStoreName ?? this.config.robloxDataStoreName
-        : this.config.robloxWinsDataStoreName ?? this.config.robloxDataStoreName;
-    if (!dataStoreName) {
-      throw new Error(`Roblox DataStore is not configured for ${kind}`);
-    }
-    const entryKey = kind === "kills" ? this.config.robloxKillsEntryKey : this.config.robloxWinsEntryKey;
-    const url = new URL(
-      `https://apis.roblox.com/datastores/v1/universes/${encodeURIComponent(this.universeId)}` +
-        `/standard-datastores/datastore/entries/entry`,
-    );
-    url.searchParams.set("datastoreName", dataStoreName);
-    url.searchParams.set("entryKey", entryKey);
-
-    const data = await requestRobloxJson(url, {
-      headers: {
-        "x-api-key": this.apiKey,
-        Accept: "application/json",
-      },
-    });
-    return parseLeaderboard(data);
+    const url = this.orderedEntriesUrl(kind);
+    url.searchParams.set("maxPageSize", String(this.topSize));
+    url.searchParams.set("orderBy", "value desc");
+    const data = await this.cloudGet(url);
+    const entries = parseOrderedEntries(data);
+    const names = await usernames(entries.map((entry) => entry.userId));
+    return entries
+      .map((entry) => ({ userId: entry.userId, username: names.get(entry.userId) ?? `Player ${entry.userId}`, score: entry.score }))
+      .sort((a, b) => b.score - a.score);
   }
 
-  private async getOrderedLeaderboard(kind: LeaderboardKind): Promise<LeaderboardEntry[]> {
-    const dataStoreName =
-      kind === "kills"
-        ? this.config.robloxKillsDataStoreName
-        : this.config.robloxWinsDataStoreName;
-    if (!dataStoreName) {
-      throw new Error(`Roblox ordered DataStore is not configured for ${kind}`);
+  async getScore(kind: LeaderboardKind, userId: number): Promise<number | null> {
+    try {
+      const data = await this.cloudGet(this.orderedEntriesUrl(kind, userId));
+      const score = Number(isRecord(data) ? data.value : Number.NaN);
+      if (!Number.isFinite(score)) throw new Error("Roblox ordered DataStore returned an invalid entry");
+      return score;
+    } catch (error) {
+      if (error instanceof Error && error.message.endsWith("(404)")) return null;
+      throw error;
     }
-
-    const url = new URL(
-      `https://apis.roblox.com/cloud/v2/universes/${encodeURIComponent(this.universeId)}` +
-        `/ordered-data-stores/${encodeURIComponent(dataStoreName)}/scopes/global/entries`,
-    );
-    url.searchParams.set("maxPageSize", String(this.config.topSize));
-    url.searchParams.set("orderBy", "value desc");
-
-    const data = await requestRobloxJson(url, {
-      headers: {
-        "x-api-key": this.apiKey,
-        Accept: "application/json",
-      },
-    });
-    const scores = parseOrderedEntries(data);
-    const usernames = await resolveUsernames(scores.map((entry) => entry.userId));
-    return scores.map(({ userId, score }) => ({
-      userId,
-      username: usernames.get(userId) ?? `User ${userId}`,
-      score,
-    }));
   }
 }

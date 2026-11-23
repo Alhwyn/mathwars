@@ -1,13 +1,12 @@
 import { ChannelType, type Client, type TextChannel } from "discord.js";
-import type { Config } from "../config.js";
-import type { DataProvider, LeaderboardEntry, LeaderboardKind } from "../data/provider.js";
+import type { Config, DataProvider, LeaderboardEntry, LeaderboardKind, Snapshot } from "../types.js";
 import { renderDailyChanges, renderDailyLeaderboard } from "../format/render.js";
 import { logError } from "../logging.js";
-import { readSnapshot, writeSnapshot, type Snapshot } from "../storage/snapshot.js";
+import { readSnapshot, writeSnapshot } from "../storage/snapshot.js";
 
 const leaderboardMarker = "||leaderbot:daily-leaderboard||";
 const kinds: LeaderboardKind[] = ["kills", "wins"];
-const minimumUpdateIntervalMs = 24 * 60 * 60 * 1000;
+const minimumUpdateIntervalMs = (6 * 24 + 12) * 60 * 60 * 1000;
 let updateInProgress = false;
 
 async function findPinnedLeaderboard(channel: TextChannel, botUserId: string, messageId?: string) {
@@ -28,10 +27,6 @@ export async function postDailyUpdate(
   if (updateInProgress) throw new Error("A leaderboard update is already in progress");
   updateInProgress = true;
   try {
-    if (!config.leaderboardChannelId) {
-      throw new Error("LEADERBOARD_CHANNEL_ID is required to post daily updates");
-    }
-
     const channel = await client.channels.fetch(config.leaderboardChannelId);
     if (!channel || channel.type !== ChannelType.GuildText) {
       throw new Error(`LEADERBOARD_CHANNEL_ID is not a text channel: ${config.leaderboardChannelId}`);
@@ -141,7 +136,7 @@ export function scheduleDailyUpdate(
       return;
     }
 
-    console.log("The last leaderboard update was at least 24 hours ago; posting a catch-up update.");
+    console.log("The last leaderboard update was at least a week ago; posting a catch-up update.");
     await postDailyUpdate(client, provider, config);
   };
 
@@ -149,11 +144,13 @@ export function scheduleDailyUpdate(
     const now = new Date();
     const next = new Date(now);
     next.setUTCHours(config.updateHourUtc, 0, 0, 0);
-    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const daysUntil = (config.updateWeekdayUtc - next.getUTCDay() + 7) % 7;
+    next.setUTCDate(next.getUTCDate() + daysUntil);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 7);
 
     const timer = setTimeout(() => {
       void postDailyUpdate(client, provider, config)
-        .catch((error: unknown) => logError(client, config, "Daily leaderboard update", error))
+        .catch((error: unknown) => logError(client, config, "Weekly leaderboard update", error))
         .finally(() => {
           scheduleNext();
         });

@@ -1,14 +1,10 @@
 node_modules/
 dist/
-.env
-snapshot.json
-snapshot.json.tmp
-npm-debug.log*
-
+package-lock.json
+.vercel/
 .env
 .env.*
 !.env.example
 snapshot.json
 snapshot.json.tmp
-node_modules/
-dist/
+npm-debug.log*
